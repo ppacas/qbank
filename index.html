@@ -401,6 +401,7 @@
   .detail-row.empty { opacity: 0.4; }
   .dr-label { flex: 1; font-size: 0.92rem; color: var(--ink); }
   .dr-stats { display: flex; gap: 0.7rem; align-items: center; font-size: 0.72rem; font-family: var(--mono); white-space: nowrap; }
+  .dr-count { color: var(--ink-soft); }
   .dr-due { color: var(--ink-muted); }
   .dr-due.on { color: var(--accent); font-weight: 600; }
   .dr-meta { color: var(--ink-muted); }
@@ -828,10 +829,11 @@ function deckStats(deckId, filter) {
   if (!deck) return { due: 0, new: 0, learned: 0, total: 0, learning: 0, lastReviewed: null };
   const ds = ensureDeckState(deckId);
   const today = todayDate();
-  let due = 0, learned = 0, newCount = 0, learning = 0;
+  let due = 0, learned = 0, newCount = 0, learning = 0, matched = 0;
   let lastReviewed = null;
   for (const card of deck.cards) {
     if (filter && filter !== "all" && !cardMatchesFilter(card, filter)) continue;
+    matched++;
     const srs = ds.cards[card.id];
     if (!srs) { newCount++; continue; }
     if (srs.lastReviewed && (!lastReviewed || srs.lastReviewed > lastReviewed)) lastReviewed = srs.lastReviewed;
@@ -839,7 +841,7 @@ function deckStats(deckId, filter) {
     else learning++;
     if (!srs.due || srs.due <= today) due++;
   }
-  return { due, new: newCount, learned, total: deck.cards.length, learning, lastReviewed };
+  return { due, new: newCount, learned, total: matched, learning, lastReviewed };
 }
 
 function globalStats() {
@@ -1043,8 +1045,9 @@ function renderModuleDetail(query) {
     row.innerHTML = `
       <div class="dr-label">${escapeHTML(ch.label)}</div>
       <div class="dr-stats">
+        <span class="dr-count">${s.total} cards</span>
         <span class="dr-due ${s.due > 0 ? "on" : ""}">${s.due} due</span>
-        <span class="dr-meta">${s.learned}/${s.total} learned</span>
+        <span class="dr-meta">${s.learned} learned</span>
       </div>
       <div class="dr-actions">
         <button class="dr-btn" data-act="due">Drill</button>
