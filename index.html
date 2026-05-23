@@ -359,6 +359,69 @@
     padding-right: 0.5rem;
   }
   .filter-chip.section-divider:hover { color: var(--ink-muted); }
+  /* Module detail (subsection drill) hub */
+  .detail-summary { margin-bottom: 1rem; }
+  .detail-allbtns { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
+  .primary-btn {
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 500;
+    background: var(--accent); color: #fff; border: none; border-radius: 4px;
+    padding: 0.6rem 1.1rem; cursor: pointer; letter-spacing: 0.02em;
+  }
+  .primary-btn:hover { background: #6f1a26; }
+  .ghost-btn {
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 500;
+    background: var(--bg-card); color: var(--ink-soft); border: 1px solid var(--rule);
+    border-radius: 4px; padding: 0.6rem 1.1rem; cursor: pointer;
+  }
+  .ghost-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .detail-overview {
+    display: flex; flex-wrap: wrap; gap: 1.2rem; font-size: 0.85rem; color: var(--ink-soft);
+    padding-bottom: 1rem; border-bottom: 1px solid var(--rule-soft);
+  }
+  .detail-overview b { color: var(--ink); font-weight: 600; }
+  .detail-filter {
+    margin: 1rem 0 0.2rem; padding: 0.5rem 0.7rem; width: 100%; max-width: 320px;
+    border: 1px solid var(--rule); border-radius: 4px; background: var(--bg-card);
+    font-family: var(--sans); font-size: 0.85rem; color: var(--ink);
+  }
+  .detail-section { margin-top: 1.4rem; }
+  .detail-section-head {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem;
+    padding-bottom: 0.3rem; border-bottom: 1px solid var(--rule-soft);
+  }
+  .detail-rows { display: flex; flex-direction: column; gap: 0.3rem; }
+  .detail-row {
+    display: flex; align-items: center; gap: 0.8rem;
+    padding: 0.55rem 0.7rem; background: var(--bg-card);
+    border: 1px solid var(--rule-soft); border-radius: 5px; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .detail-row:hover { border-color: var(--accent-soft); background: var(--bg-card-hover); }
+  .detail-row.empty { opacity: 0.4; }
+  .dr-label { flex: 1; font-size: 0.92rem; color: var(--ink); }
+  .dr-stats { display: flex; gap: 0.7rem; align-items: center; font-size: 0.72rem; font-family: var(--mono); white-space: nowrap; }
+  .dr-due { color: var(--ink-muted); }
+  .dr-due.on { color: var(--accent); font-weight: 600; }
+  .dr-meta { color: var(--ink-muted); }
+  .dr-actions { display: flex; gap: 0.3rem; }
+  .dr-btn {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.04em;
+    padding: 0.3rem 0.55rem; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--bg); color: var(--ink-soft); cursor: pointer;
+  }
+  .dr-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .dr-btn.ghost { color: var(--ink-muted); }
+  .mode-toggle {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.05em;
+    padding: 0.4rem 0.7rem; border: 1px solid var(--rule); border-radius: 4px;
+    background: var(--bg-card); color: var(--ink-soft); cursor: pointer;
+  }
+  .mode-toggle.cram { background: var(--gold); color: #fff; border-color: var(--gold); }
+  .tile-subcount {
+    font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.06em;
+    color: var(--accent-soft);
+  }
   .card {
     background: var(--bg-card);
     border: 1px solid var(--rule-soft);
@@ -629,15 +692,29 @@
 
   <p class="footer-note">
     Rebuild with: <kbd>python3 build_dashboard.py</kbd> after adding/editing any module.<br>
-    Keyboard in study mode: <kbd>Space</kbd> reveal · <kbd>1</kbd> Again · <kbd>2</kbd> Hard · <kbd>3</kbd> Good · <kbd>4</kbd> Easy · <kbd>Esc</kbd> back to dashboard
+    Click a module → drill any subsection (<kbd>Drill</kbd> due-only · <kbd>Cram</kbd> whole slice).<br>
+    Keyboard in study mode: <kbd>Space</kbd> reveal · <kbd>1</kbd> Again · <kbd>2</kbd> Hard · <kbd>3</kbd> Good · <kbd>4</kbd> Easy · <kbd>Esc</kbd> step back
   </p>
+</div>
+
+<div id="module-detail-view" class="study-overlay">
+  <div class="study-container">
+    <div class="study-header">
+      <button class="back-btn" id="detail-back">← Dashboard</button>
+      <div class="study-title" id="detail-title"></div>
+    </div>
+    <div id="detail-summary" class="detail-summary"></div>
+    <input type="text" id="detail-filter" class="detail-filter" placeholder="Filter subsections…">
+    <div id="detail-sections"></div>
+  </div>
 </div>
 
 <div id="study-view" class="study-overlay">
   <div class="study-container">
     <div class="study-header">
-      <button class="back-btn" id="back-to-dashboard">← Dashboard</button>
+      <button class="back-btn" id="back-to-dashboard">← Subsections</button>
       <div class="study-title" id="study-title"></div>
+      <button class="mode-toggle" id="mode-toggle" title="Showing only cards due today">Due</button>
     </div>
 
     <div class="study-stats-bar">
@@ -694,6 +771,9 @@ let activeDeckId = null;
 let activeFilter = "all";
 let currentCardId = null;
 let backRevealed = false;
+let detailDeckId = null;
+let cramMode = false;
+let cramQueue = [];   // card ids remaining in the current cram pass
 
 function saveState() {
   localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -743,7 +823,7 @@ const SM2 = {
 // ============================================================
 // DECK STATS
 // ============================================================
-function deckStats(deckId) {
+function deckStats(deckId, filter) {
   const deck = getDeck(deckId);
   if (!deck) return { due: 0, new: 0, learned: 0, total: 0, learning: 0, lastReviewed: null };
   const ds = ensureDeckState(deckId);
@@ -751,6 +831,7 @@ function deckStats(deckId) {
   let due = 0, learned = 0, newCount = 0, learning = 0;
   let lastReviewed = null;
   for (const card of deck.cards) {
+    if (filter && filter !== "all" && !cardMatchesFilter(card, filter)) continue;
     const srs = ds.cards[card.id];
     if (!srs) { newCount++; continue; }
     if (srs.lastReviewed && (!lastReviewed || srs.lastReviewed > lastReviewed)) lastReviewed = srs.lastReviewed;
@@ -825,12 +906,13 @@ function renderDashboard() {
 
   // Attach click handlers
   document.querySelectorAll(".module-tile").forEach(tile => {
-    tile.addEventListener("click", () => enterStudyMode(tile.dataset.deckId));
+    tile.addEventListener("click", () => enterModuleDetail(tile.dataset.deckId));
   });
 }
 
 function renderTile(m) {
   const s = deckStats(m.deck_id);
+  const subCount = (m.filter_chips || []).filter(c => !c.divider && c.filter !== "all").length;
   const pctLearned = s.total > 0 ? (s.learned / s.total * 100) : 0;
   const pctLearning = s.total > 0 ? (s.learning / s.total * 100) : 0;
   const isNew = !s.lastReviewed;
@@ -839,7 +921,7 @@ function renderTile(m) {
     <div class="module-tile" data-deck-id="${escapeHTML(m.deck_id)}">
       ${isNew ? '<span class="badge-new">New</span>' : ''}
       <div class="tile-title">${escapeHTML(m.title)}</div>
-      <div class="tile-card-count">${m.card_count} cards</div>
+      <div class="tile-card-count">${m.card_count} cards${subCount > 0 ? ` · <span class="tile-subcount">${subCount} subsections ▸</span>` : ""}</div>
       <div class="tile-progress-wrap">
         ${donutSVG(pctLearned, pctLearning)}
         <div class="tile-stats">
@@ -885,16 +967,139 @@ function formatRelative(dateStr) {
 // ============================================================
 // STUDY MODE
 // ============================================================
-function enterStudyMode(deckId) {
+function showDashboard() {
+  document.getElementById("study-view").classList.remove("open");
+  document.getElementById("module-detail-view").classList.remove("open");
+  document.getElementById("dashboard-view").style.display = "block";
+  activeDeckId = null; detailDeckId = null; cramMode = false; cramQueue = [];
+  renderDashboard();
+  window.scrollTo(0,0);
+}
+
+// ---- Module detail hub: subsections as drillable rows ----
+function enterModuleDetail(deckId) {
+  detailDeckId = deckId;
+  const entry = DECK_REGISTRY.find(d => d.deck_id === deckId);
+  const meta = entry.deck.deck_metadata || {};
+  document.getElementById("detail-title").textContent = meta.title || deckId;
+  document.getElementById("dashboard-view").style.display = "none";
+  document.getElementById("study-view").classList.remove("open");
+  document.getElementById("module-detail-view").classList.add("open");
+  document.getElementById("detail-filter").value = "";
+  window.scrollTo(0,0);
+  renderModuleDetail("");
+}
+
+function renderModuleDetail(query) {
+  const deckId = detailDeckId;
+  const entry = DECK_REGISTRY.find(d => d.deck_id === deckId);
+  const q = (query || "").trim().toLowerCase();
+  const all = deckStats(deckId, "all");
+
+  const summary = document.getElementById("detail-summary");
+  summary.innerHTML = `
+    <div class="detail-allbtns">
+      <button class="primary-btn" data-act="all-due">Study all due — ${all.due}</button>
+      <button class="ghost-btn" data-act="all-cram">Cram all ${all.total}</button>
+    </div>
+    <div class="detail-overview">
+      <span><b>${all.due}</b> due</span>
+      <span><b>${all.new}</b> new</span>
+      <span><b>${all.learning}</b> learning</span>
+      <span><b>${all.learned}</b> learned</span>
+      <span><b>${all.total}</b> total</span>
+    </div>`;
+  summary.querySelector('[data-act="all-due"]').onclick = () => enterStudyMode(deckId, "all", false);
+  summary.querySelector('[data-act="all-cram"]').onclick = () => enterStudyMode(deckId, "all", true);
+
+  const container = document.getElementById("detail-sections");
+  container.innerHTML = "";
+  const chips = entry.filter_chips || [];
+  let rowsWrap = null;
+  const openSection = (label) => {
+    const sec = document.createElement("div");
+    sec.className = "detail-section";
+    if (label) {
+      const h = document.createElement("div");
+      h.className = "detail-section-head";
+      h.textContent = label;
+      sec.appendChild(h);
+    }
+    rowsWrap = document.createElement("div");
+    rowsWrap.className = "detail-rows";
+    sec.appendChild(rowsWrap);
+    container.appendChild(sec);
+  };
+
+  for (const ch of chips) {
+    if (ch.divider) { openSection(ch.label.replace(/—/g, "").trim()); continue; }
+    if (ch.filter === "all") continue;            // covered by the buttons above
+    if (q && !ch.label.toLowerCase().includes(q)) continue;
+    if (!rowsWrap) openSection(null);
+    const s = deckStats(deckId, ch.filter);
+    const row = document.createElement("div");
+    row.className = "detail-row" + (s.total === 0 ? " empty" : "");
+    row.dataset.filter = ch.filter;
+    row.innerHTML = `
+      <div class="dr-label">${escapeHTML(ch.label)}</div>
+      <div class="dr-stats">
+        <span class="dr-due ${s.due > 0 ? "on" : ""}">${s.due} due</span>
+        <span class="dr-meta">${s.learned}/${s.total} learned</span>
+      </div>
+      <div class="dr-actions">
+        <button class="dr-btn" data-act="due">Drill</button>
+        <button class="dr-btn ghost" data-act="cram">Cram</button>
+      </div>`;
+    rowsWrap.appendChild(row);
+  }
+  // drop empty sections (e.g. a divider whose rows were all filtered out)
+  container.querySelectorAll(".detail-section").forEach(sec => {
+    if (!sec.querySelector(".detail-row")) sec.remove();
+  });
+
+  container.querySelectorAll(".detail-row").forEach(row => {
+    const f = row.dataset.filter;
+    row.onclick = () => enterStudyMode(deckId, f, false);
+    row.querySelector('[data-act="due"]').onclick = (e) => { e.stopPropagation(); enterStudyMode(deckId, f, false); };
+    row.querySelector('[data-act="cram"]').onclick = (e) => { e.stopPropagation(); enterStudyMode(deckId, f, true); };
+  });
+}
+
+function buildCramQueue() {
+  const deck = getDeck(activeDeckId);
+  cramQueue = deck.cards.filter(c => cardMatchesFilter(c, activeFilter)).map(c => c.id);
+}
+
+function updateModeToggle() {
+  const b = document.getElementById("mode-toggle");
+  b.textContent = cramMode ? "Cram ✓" : "Due";
+  b.classList.toggle("cram", cramMode);
+  b.title = cramMode
+    ? "Cram: every card in this slice, ignoring the schedule"
+    : "Showing only cards due today";
+}
+
+function enterStudyMode(deckId, filter, cram) {
   activeDeckId = deckId;
   const deck = getDeck(deckId);
   const meta = deck.deck_metadata || {};
-  activeFilter = (state[deckId] && state[deckId].filter) || "all";
+  if (filter !== undefined && filter !== null) {
+    activeFilter = filter;
+    if (!state[deckId]) state[deckId] = {};
+    state[deckId].filter = filter;
+    saveState();
+  } else {
+    activeFilter = (state[deckId] && state[deckId].filter) || "all";
+  }
+  cramMode = !!cram;
   document.getElementById("study-title").textContent = meta.title || deckId;
   document.getElementById("dashboard-view").style.display = "none";
+  document.getElementById("module-detail-view").classList.remove("open");
   document.getElementById("study-view").classList.add("open");
   window.scrollTo(0,0);
   buildFilterBar(deckId);
+  if (cramMode) buildCramQueue();
+  updateModeToggle();
   renderStudy();
 }
 
@@ -950,6 +1155,7 @@ function buildFilterBar(deckId) {
     if (!state[activeDeckId]) state[activeDeckId] = {};
     state[activeDeckId].filter = activeFilter;
     saveState();
+    if (cramMode) buildCramQueue();
     renderStudy();
   });
 }
@@ -1004,20 +1210,27 @@ function dueCards() {
 
 function renderStudy() {
   const deck = getDeck(activeDeckId);
-  const stats = deckStats(activeDeckId);
+  const stats = deckStats(activeDeckId, activeFilter);
   document.getElementById("s-due").textContent = stats.due;
   document.getElementById("s-new").textContent = stats.new;
   document.getElementById("s-learned").textContent = stats.learned;
   document.getElementById("s-total").textContent = stats.total;
   document.getElementById("s-reviews").textContent = (state[activeDeckId] && state[activeDeckId].reviewsToday) || 0;
 
-  const due = dueCards();
+  let queue;
+  if (cramMode) {
+    queue = cramQueue.map(id => deck.cards.find(c => c.id === id)).filter(Boolean);
+  } else {
+    queue = dueCards();
+  }
   const stage = document.getElementById("card-stage");
-  if (due.length === 0) {
+  if (queue.length === 0) {
     stage.innerHTML = renderDoneState();
+    const cb = document.getElementById("done-cram-btn");
+    if (cb) cb.onclick = () => { cramMode = true; buildCramQueue(); updateModeToggle(); renderStudy(); };
     return;
   }
-  const card = due[0];
+  const card = queue[0];
   currentCardId = card.id;
   backRevealed = false;
   stage.innerHTML = renderCardHTML(card, false);
@@ -1071,13 +1284,23 @@ function renderRateRow() {
 }
 
 function renderDoneState() {
-  const label = activeFilter === "all" ? "across all topics" : `for "${activeFilter}"`;
+  if (cramMode) {
+    return `
+    <div class="done-state">
+      <div class="done-icon">∎</div>
+      <h2>Cram pass complete.</h2>
+      <p>Every card in this slice was shown once.<br>Ratings still counted toward the schedule.</p>
+      <button class="restart-btn" onclick="document.getElementById('back-to-dashboard').click()">← Back to subsections</button>
+    </div>
+  `;
+  }
+  const label = activeFilter === "all" ? "across all topics" : "in this subsection";
   return `
     <div class="done-state">
       <div class="done-icon">∴</div>
       <h2>Nothing due ${label}.</h2>
-      <p>Acedia, dispelled by the regular review.<br>Come back when the next interval falls due.</p>
-      <button class="restart-btn" onclick="document.querySelector('.filter-chip[data-filter=&quot;all&quot;]').click()">View All Topics</button>
+      <p>Acedia, dispelled by the regular review.<br>Switch to Cram to drill the whole slice anyway.</p>
+      <button class="restart-btn" id="done-cram-btn">Cram this slice</button>
     </div>
   `;
 }
@@ -1105,6 +1328,8 @@ function rateCard(card, quality) {
   // Activity tracking
   const today = todayDate();
   activity[today] = (activity[today] || 0) + 1;
+  // In a cram pass, drop the rated card so the pass walks the whole slice once.
+  if (cramMode) cramQueue = cramQueue.filter(id => id !== card.id);
   saveState();
   renderStudy();
 }
@@ -1188,10 +1413,26 @@ function markdownLite(text) {
 // ============================================================
 document.getElementById("back-to-dashboard").addEventListener("click", () => {
   document.getElementById("study-view").classList.remove("open");
-  document.getElementById("dashboard-view").style.display = "block";
-  activeDeckId = null;
-  renderDashboard();
-  window.scrollTo(0,0);
+  cramMode = false; cramQueue = [];
+  if (activeDeckId) {
+    enterModuleDetail(activeDeckId);  // study mode returns to its module hub
+  } else {
+    showDashboard();
+  }
+});
+
+document.getElementById("detail-back").addEventListener("click", showDashboard);
+
+document.getElementById("mode-toggle").addEventListener("click", () => {
+  cramMode = !cramMode;
+  if (cramMode) buildCramQueue();
+  updateModeToggle();
+  renderStudy();
+});
+
+const detailFilter = document.getElementById("detail-filter");
+detailFilter.addEventListener("input", () => {
+  if (detailDeckId) renderModuleDetail(detailFilter.value);
 });
 
 document.getElementById("daily-target").addEventListener("change", e => {
@@ -1209,12 +1450,16 @@ searchInput.addEventListener("input", () => {
 
 document.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-  // ESC: back to dashboard
-  if (e.key === "Escape" && activeDeckId) {
-    document.getElementById("back-to-dashboard").click();
+  // ESC: step back one level (study → hub → dashboard)
+  if (e.key === "Escape") {
+    if (document.getElementById("study-view").classList.contains("open")) {
+      document.getElementById("back-to-dashboard").click();
+    } else if (document.getElementById("module-detail-view").classList.contains("open")) {
+      showDashboard();
+    }
     return;
   }
-  if (!activeDeckId) return;
+  if (!activeDeckId || !document.getElementById("study-view").classList.contains("open")) return;
   if (e.code === "Space" && !backRevealed) {
     e.preventDefault();
     const btn = document.getElementById("reveal");
