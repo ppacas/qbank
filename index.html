@@ -652,6 +652,14 @@
     .face-content { font-size: 1.05rem; }
     .rate-row { grid-template-columns: repeat(2, 1fr); }
     .tile-title { margin-right: 3rem; }
+    /* Stack the study/detail header: controls on top, title full-width below */
+    .study-header { align-items: center; row-gap: 0.6rem; }
+    .study-header .back-btn { order: 1; }
+    .study-header .mode-toggle { order: 2; }
+    .study-title {
+      order: 3; flex: 1 1 100%; width: 100%;
+      font-size: 1.3rem; line-height: 1.2;
+    }
   }
 </style>
 </head>
