@@ -324,6 +324,8 @@
     color: var(--ink);
   }
   .study-stats-bar .value.due { color: var(--accent); }
+  .study-stats-bar .value.new { color: var(--blue); }
+  .study-stats-bar .value.learned { color: var(--green); }
   .filter-bar {
     display: flex;
     flex-wrap: wrap;
@@ -393,18 +395,22 @@
   .detail-rows { display: flex; flex-direction: column; gap: 0.3rem; }
   .detail-row {
     display: flex; align-items: center; gap: 0.8rem;
-    padding: 0.55rem 0.7rem; background: var(--bg-card);
+    padding: 0.55rem 0.7rem; background-color: var(--bg-card);
+    background-repeat: no-repeat;
     border: 1px solid var(--rule-soft); border-radius: 5px; cursor: pointer;
-    transition: all 0.12s;
+    transition: border-color 0.12s, background-color 0.12s;
   }
-  .detail-row:hover { border-color: var(--accent-soft); background: var(--bg-card-hover); }
+  .detail-row:hover { border-color: var(--accent-soft); background-color: var(--bg-card-hover); }
   .detail-row.empty { opacity: 0.4; }
   .dr-label { flex: 1; font-size: 0.92rem; color: var(--ink); }
-  .dr-stats { display: flex; gap: 0.7rem; align-items: center; font-size: 0.72rem; font-family: var(--mono); white-space: nowrap; }
-  .dr-count { color: var(--ink-soft); }
+  .dr-stats { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; font-size: 0.72rem; font-family: var(--mono); }
+  .dr-stats > span { white-space: nowrap; }
+  .dr-count { color: var(--ink); }
   .dr-due { color: var(--ink-muted); }
   .dr-due.on { color: var(--accent); font-weight: 600; }
-  .dr-meta { color: var(--ink-muted); }
+  .dr-new { color: var(--ink-muted); }
+  .dr-learning { color: var(--gold); }
+  .dr-learned { color: var(--green); }
   .dr-actions { display: flex; gap: 0.3rem; }
   .dr-btn {
     font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.04em;
@@ -725,11 +731,15 @@
       </div>
       <div class="stat-item">
         <span class="label">New</span>
-        <span class="value" id="s-new">—</span>
+        <span class="value new" id="s-new">—</span>
+      </div>
+      <div class="stat-item">
+        <span class="label">Learning</span>
+        <span class="value" id="s-learning">—</span>
       </div>
       <div class="stat-item">
         <span class="label">Learned</span>
-        <span class="value" id="s-learned">—</span>
+        <span class="value learned" id="s-learned">—</span>
       </div>
       <div class="stat-item">
         <span class="label">Total</span>
@@ -1042,12 +1052,24 @@ function renderModuleDetail(query) {
     const row = document.createElement("div");
     row.className = "detail-row" + (s.total === 0 ? " empty" : "");
     row.dataset.filter = ch.filter;
+    // Fractional fill: green = learned, gold = learning, blank = untouched.
+    if (s.total > 0) {
+      const lPct = (s.learned / s.total * 100);
+      const mPct = ((s.learned + s.learning) / s.total * 100);
+      row.style.backgroundImage =
+        `linear-gradient(to right,` +
+        ` rgba(90,122,74,0.30) 0%, rgba(90,122,74,0.30) ${lPct}%,` +
+        ` rgba(184,137,61,0.22) ${lPct}%, rgba(184,137,61,0.22) ${mPct}%,` +
+        ` transparent ${mPct}%, transparent 100%)`;
+    }
     row.innerHTML = `
       <div class="dr-label">${escapeHTML(ch.label)}</div>
       <div class="dr-stats">
         <span class="dr-count">${s.total} cards</span>
         <span class="dr-due ${s.due > 0 ? "on" : ""}">${s.due} due</span>
-        <span class="dr-meta">${s.learned} learned</span>
+        <span class="dr-new">${s.new} new</span>
+        <span class="dr-learning">${s.learning} learning</span>
+        <span class="dr-learned">${s.learned} learned</span>
       </div>
       <div class="dr-actions">
         <button class="dr-btn" data-act="due">Drill</button>
@@ -1216,6 +1238,7 @@ function renderStudy() {
   const stats = deckStats(activeDeckId, activeFilter);
   document.getElementById("s-due").textContent = stats.due;
   document.getElementById("s-new").textContent = stats.new;
+  document.getElementById("s-learning").textContent = stats.learning;
   document.getElementById("s-learned").textContent = stats.learned;
   document.getElementById("s-total").textContent = stats.total;
   document.getElementById("s-reviews").textContent = (state[activeDeckId] && state[activeDeckId].reviewsToday) || 0;
