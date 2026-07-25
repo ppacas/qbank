@@ -8,7 +8,7 @@ Single self-contained HTML file with embedded atomic Q&A + clinical vignette car
 
 ## Coverage
 
-63 modules · ~6,400 atomic cards across 14 exam domains:
+63 modules · ~7,860 atomic cards across 14 exam domains:
 
 Breast · CNS · CUP · Endocrine · Fundamentals · Gastrointestinal · Genitourinary · Gynaecology · Haematology · Head & Neck · Sarcoma & GIST · Skin · Supportive Care · Thoracic
 
