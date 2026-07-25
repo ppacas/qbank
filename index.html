@@ -846,7 +846,8 @@ let cramMode = false;
 let shuffleMode = false;  // true = studying every deck at once in random order
 let currentDeckId = null; // deck of the card currently on screen (differs per-card in shuffle)
 let sessionQueue = [];   // ordered {deckId, id} items remaining in the current sitting (Due, Cram & Shuffle).
-                         // A card rated "Again" (q=0) is pushed to the back and stays until rated >=2.
+                         // A card rated "Again" (q=0) is re-queued AGAIN_GAP cards ahead and stays until rated >=2.
+const AGAIN_GAP = 5;     // cards shown before an "Again" card returns (returns as the (AGAIN_GAP+1)-th card)
 
 function shuffleArray(a) {
   for (let i = a.length - 1; i > 0; i--) {
@@ -1486,10 +1487,12 @@ function rateCard(card, quality) {
   // Activity tracking
   const today = todayDate();
   activity[today] = (activity[today] || 0) + 1;
-  // Session queue: "Again" (q=0) goes to the back and must be re-answered;
-  // any rating >=2 (Hard/Good/Easy) clears the card from this sitting.
+  // Session queue: "Again" (q=0) is re-inserted AGAIN_GAP cards ahead so it
+  // returns soon (still warm) but after a short spacing — not at the very end.
+  // splice clamps to the end when fewer than AGAIN_GAP cards remain.
+  // Any rating >=2 (Hard/Good/Easy) clears the card from this sitting.
   sessionQueue = sessionQueue.filter(it => !(it.deckId === deckId && it.id === card.id));
-  if (quality === 0) sessionQueue.push({ deckId, id: card.id });
+  if (quality === 0) sessionQueue.splice(AGAIN_GAP, 0, { deckId, id: card.id });
   saveState();
   renderStudy();
 }
