@@ -95,6 +95,40 @@
     font-size: 0.8rem;
     color: var(--ink-soft);
   }
+  /* Total progress bar */
+  .total-progress-block { margin: 1.4rem 0 0.6rem; }
+  .total-progress-head {
+    display: flex; align-items: center; gap: 1rem 1.4rem;
+    flex-wrap: wrap; margin-bottom: 0.5rem;
+  }
+  .total-progress-head .tp-title {
+    font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--ink-muted);
+  }
+  .tp-legend { font-size: 0.78rem; color: var(--ink-soft); display: flex; gap: 1rem; flex-wrap: wrap; }
+  .tp-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 0.35rem; vertical-align: middle; }
+  .tp-dot-learned { background: var(--green); }
+  .tp-dot-learning { background: var(--blue); }
+  .tp-dot-new { background: var(--rule); }
+  .total-progress-bar {
+    height: 16px; width: 100%; background: var(--rule-soft);
+    border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; display: flex;
+  }
+  .total-progress-bar > span { height: 100%; display: block; transition: width 0.4s ease; }
+  .tp-seg-learned { background: var(--green); }
+  .tp-seg-learning { background: var(--blue); }
+  .tp-caption { margin-top: 0.4rem; font-size: 0.78rem; color: var(--ink-soft); }
+  .shuffle-btn {
+    margin-left: auto; padding: 0.5rem 1rem; border-radius: 4px;
+    border: 1px solid var(--gold); background: var(--gold); color: #fff;
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    letter-spacing: 0.01em; transition: filter 0.15s ease;
+  }
+  .shuffle-btn:hover { filter: brightness(1.08); }
+  .card-module {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--gold);
+  }
   .controls {
     display: flex;
     flex-wrap: wrap;
@@ -672,6 +706,23 @@
     <p class="subtitle">Daily review across 63 modules · 7861 atomic cards · 14 exam domains</p>
   </header>
 
+  <div class="total-progress-block">
+    <div class="total-progress-head">
+      <span class="tp-title">Total progress</span>
+      <span class="tp-legend">
+        <span><span class="dot tp-dot-learned"></span>Learned <b id="tp-learned">0</b></span>
+        <span><span class="dot tp-dot-learning"></span>Learning <b id="tp-learning">0</b></span>
+        <span><span class="dot tp-dot-new"></span>New <b id="tp-new">0</b></span>
+      </span>
+      <button class="shuffle-btn" id="shuffle-all" title="Study every card in the whole bank in random order">⤨ Shuffle all — random</button>
+    </div>
+    <div class="total-progress-bar" id="total-progress-bar" title="Learned + Learning vs total across the whole bank">
+      <span class="tp-seg-learned" id="tp-seg-learned" style="width:0%"></span>
+      <span class="tp-seg-learning" id="tp-seg-learning" style="width:0%"></span>
+    </div>
+    <div class="tp-caption" id="tp-caption"></div>
+  </div>
+
   <div class="global-stats">
     <div class="stat-card">
       <div class="label">Due today</div>
@@ -792,8 +843,22 @@ let currentCardId = null;
 let backRevealed = false;
 let detailDeckId = null;
 let cramMode = false;
-let sessionQueue = [];   // ordered card ids remaining in the current sitting (both Due & Cram).
+let shuffleMode = false;  // true = studying every deck at once in random order
+let currentDeckId = null; // deck of the card currently on screen (differs per-card in shuffle)
+let sessionQueue = [];   // ordered {deckId, id} items remaining in the current sitting (Due, Cram & Shuffle).
                          // A card rated "Again" (q=0) is pushed to the back and stays until rated >=2.
+
+function shuffleArray(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function deckTitle(deckId) {
+  const e = DECK_REGISTRY.find(d => d.deck_id === deckId);
+  return e ? (e.title || deckId) : deckId;
+}
 
 function saveState() {
   localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -864,15 +929,16 @@ function deckStats(deckId, filter) {
 }
 
 function globalStats() {
-  let due = 0, learned = 0, total = 0, newCount = 0;
+  let due = 0, learned = 0, total = 0, newCount = 0, learning = 0;
   for (const m of DECK_REGISTRY) {
     const s = deckStats(m.deck_id);
     due += s.due;
     learned += s.learned;
     total += s.total;
     newCount += s.new;
+    learning += s.learning;
   }
-  return { due, learned, total, new: newCount };
+  return { due, learned, total, new: newCount, learning };
 }
 
 // ============================================================
@@ -900,6 +966,19 @@ function renderDashboard() {
   document.getElementById("g-learned-pct").textContent = g.total > 0 ? `${Math.round(g.learned/g.total*100)}% of ${g.total}` : "";
   document.getElementById("g-streak").textContent = streak.count;
   document.getElementById("daily-target").value = target;
+
+  // Total progress bar (Learned + Learning vs whole bank)
+  const learnedPct = g.total ? (g.learned / g.total * 100) : 0;
+  const learningPct = g.total ? (g.learning / g.total * 100) : 0;
+  document.getElementById("tp-seg-learned").style.width = learnedPct.toFixed(1) + "%";
+  document.getElementById("tp-seg-learning").style.width = learningPct.toFixed(1) + "%";
+  document.getElementById("tp-learned").textContent = g.learned;
+  document.getElementById("tp-learning").textContent = g.learning;
+  document.getElementById("tp-new").textContent = g.new;
+  const studied = g.learned + g.learning;
+  document.getElementById("tp-caption").textContent = g.total
+    ? `${studied.toLocaleString()} of ${g.total.toLocaleString()} cards studied (${Math.round(studied/g.total*100)}%) · ${g.learned.toLocaleString()} learned (${Math.round(learnedPct)}%)`
+    : "";
 
   // Group by domain folder
   const byDomain = {};
@@ -992,7 +1071,7 @@ function showDashboard() {
   document.getElementById("study-view").classList.remove("open");
   document.getElementById("module-detail-view").classList.remove("open");
   document.getElementById("dashboard-view").style.display = "block";
-  activeDeckId = null; detailDeckId = null; cramMode = false; sessionQueue = [];
+  activeDeckId = null; detailDeckId = null; cramMode = false; shuffleMode = false; sessionQueue = [];
   renderDashboard();
   window.scrollTo(0,0);
 }
@@ -1100,13 +1179,31 @@ function renderModuleDetail(query) {
 }
 
 function buildSessionQueue() {
-  // Cram = every card in the slice; Due = only cards due today. Either way,
-  // rateCard() keeps "Again"-rated cards in this queue until they earn >=2.
-  const deck = getDeck(activeDeckId);
-  const cards = cramMode
-    ? deck.cards.filter(c => cardMatchesFilter(c, activeFilter))
-    : dueCards();
-  sessionQueue = cards.map(c => c.id);
+  // Items are {deckId, id}. Cram = every card in scope; Due = only cards due today.
+  // Shuffle = every deck at once, random order. rateCard() keeps "Again"-rated
+  // cards in this queue until they earn >=2.
+  const today = todayDate();
+  let items = [];
+  if (shuffleMode) {
+    for (const m of DECK_REGISTRY) {
+      const ds = ensureDeckState(m.deck_id);
+      for (const c of m.deck.cards) {
+        if (!cramMode) {
+          const srs = ds.cards[c.id];
+          if (srs && srs.due && srs.due > today) continue;  // due-only
+        }
+        items.push({ deckId: m.deck_id, id: c.id });
+      }
+    }
+    shuffleArray(items);
+  } else {
+    const deck = getDeck(activeDeckId);
+    const cards = cramMode
+      ? deck.cards.filter(c => cardMatchesFilter(c, activeFilter))
+      : dueCards();
+    items = cards.map(c => ({ deckId: activeDeckId, id: c.id }));
+  }
+  sessionQueue = items;
 }
 
 function updateModeToggle() {
@@ -1131,12 +1228,31 @@ function enterStudyMode(deckId, filter, cram) {
     activeFilter = (state[deckId] && state[deckId].filter) || "all";
   }
   cramMode = !!cram;
+  shuffleMode = false;
   document.getElementById("study-title").textContent = meta.title || deckId;
   document.getElementById("dashboard-view").style.display = "none";
   document.getElementById("module-detail-view").classList.remove("open");
   document.getElementById("study-view").classList.add("open");
   window.scrollTo(0,0);
+  document.getElementById("filter-bar").style.display = "";
   buildFilterBar(deckId);
+  buildSessionQueue();
+  updateModeToggle();
+  renderStudy();
+}
+
+function enterShuffleMode() {
+  // Study every card in the whole bank, in random order.
+  shuffleMode = true;
+  activeDeckId = null;
+  activeFilter = "all";
+  cramMode = true;  // default: all cards (toggle to Due for due-only across the bank)
+  document.getElementById("study-title").textContent = "Shuffle — all modules (random)";
+  document.getElementById("dashboard-view").style.display = "none";
+  document.getElementById("module-detail-view").classList.remove("open");
+  document.getElementById("study-view").classList.add("open");
+  window.scrollTo(0,0);
+  document.getElementById("filter-bar").style.display = "none";  // no per-deck chips across the bank
   buildSessionQueue();
   updateModeToggle();
   renderStudy();
@@ -1248,25 +1364,30 @@ function dueCards() {
 }
 
 function renderStudy() {
-  const deck = getDeck(activeDeckId);
-  const stats = deckStats(activeDeckId, activeFilter);
+  // Stats bar: per-deck when studying one module, global when shuffling.
+  const stats = shuffleMode ? globalStats() : deckStats(activeDeckId, activeFilter);
   document.getElementById("s-due").textContent = stats.due;
   document.getElementById("s-new").textContent = stats.new;
   document.getElementById("s-learning").textContent = stats.learning;
   document.getElementById("s-learned").textContent = stats.learned;
   document.getElementById("s-total").textContent = stats.total;
-  document.getElementById("s-reviews").textContent = (state[activeDeckId] && state[activeDeckId].reviewsToday) || 0;
+  document.getElementById("s-reviews").textContent = shuffleMode
+    ? (activity[todayDate()] || 0)
+    : ((state[activeDeckId] && state[activeDeckId].reviewsToday) || 0);
 
-  const queue = sessionQueue.map(id => deck.cards.find(c => c.id === id)).filter(Boolean);
   const stage = document.getElementById("card-stage");
-  if (queue.length === 0) {
+  if (sessionQueue.length === 0) {
     stage.innerHTML = renderDoneState();
     const cb = document.getElementById("done-cram-btn");
     if (cb) cb.onclick = () => { cramMode = true; buildSessionQueue(); updateModeToggle(); renderStudy(); };
     return;
   }
-  const card = queue[0];
-  currentCardId = card.id;
+  const item = sessionQueue[0];
+  const deck = getDeck(item.deckId);
+  const card = deck && deck.cards.find(c => c.id === item.id);
+  if (!card) { sessionQueue.shift(); renderStudy(); return; }  // stale ref — skip
+  currentDeckId = item.deckId;
+  currentCardId = item.id;
   backRevealed = false;
   stage.innerHTML = renderCardHTML(card, false);
   attachCardHandlers(card);
@@ -1295,6 +1416,7 @@ function renderCardHTML(card, showBack) {
     <div class="card" data-type="${card.type}">
       <div class="card-meta">
         <span class="card-id">${escapeHTML(card.id)}</span>
+        ${shuffleMode ? `<span class="card-module">${escapeHTML(deckTitle(currentDeckId))}</span>` : ""}
         <span class="card-type" data-t="${card.type}">${typeLabels[card.type] || card.type}</span>
       </div>
       <div class="face-label">${card.type === "vignette" ? "Clinical Stem" : "Front"}</div>
@@ -1355,7 +1477,8 @@ function revealAnswer(card) {
 }
 
 function rateCard(card, quality) {
-  const ds = ensureDeckState(activeDeckId);
+  const deckId = currentDeckId || activeDeckId;
+  const ds = ensureDeckState(deckId);
   const srs = SM2.next({ srs: ds.cards[card.id] || {} }, quality);
   ds.cards[card.id] = srs;
   ds.reviewsToday += 1;
@@ -1365,8 +1488,8 @@ function rateCard(card, quality) {
   activity[today] = (activity[today] || 0) + 1;
   // Session queue: "Again" (q=0) goes to the back and must be re-answered;
   // any rating >=2 (Hard/Good/Easy) clears the card from this sitting.
-  sessionQueue = sessionQueue.filter(id => id !== card.id);
-  if (quality === 0) sessionQueue.push(card.id);
+  sessionQueue = sessionQueue.filter(it => !(it.deckId === deckId && it.id === card.id));
+  if (quality === 0) sessionQueue.push({ deckId, id: card.id });
   saveState();
   renderStudy();
 }
@@ -1450,7 +1573,7 @@ function markdownLite(text) {
 // ============================================================
 document.getElementById("back-to-dashboard").addEventListener("click", () => {
   document.getElementById("study-view").classList.remove("open");
-  cramMode = false; sessionQueue = [];
+  cramMode = false; shuffleMode = false; sessionQueue = [];
   if (activeDeckId) {
     enterModuleDetail(activeDeckId);  // study mode returns to its module hub
   } else {
@@ -1466,6 +1589,8 @@ document.getElementById("mode-toggle").addEventListener("click", () => {
   updateModeToggle();
   renderStudy();
 });
+
+document.getElementById("shuffle-all").addEventListener("click", () => enterShuffleMode());
 
 const detailFilter = document.getElementById("detail-filter");
 detailFilter.addEventListener("input", () => {
@@ -1496,7 +1621,7 @@ document.addEventListener("keydown", e => {
     }
     return;
   }
-  if (!activeDeckId || !document.getElementById("study-view").classList.contains("open")) return;
+  if (!document.getElementById("study-view").classList.contains("open")) return;
   if (e.code === "Space" && !backRevealed) {
     e.preventDefault();
     const btn = document.getElementById("reveal");
@@ -1505,8 +1630,8 @@ document.addEventListener("keydown", e => {
     const map = { "1": 0, "2": 3, "3": 4, "4": 5 };
     if (map[e.key] !== undefined) {
       e.preventDefault();
-      const deck = getDeck(activeDeckId);
-      const card = deck.cards.find(c => c.id === currentCardId);
+      const deck = getDeck(currentDeckId);
+      const card = deck && deck.cards.find(c => c.id === currentCardId);
       if (card) rateCard(card, map[e.key]);
     }
   }
