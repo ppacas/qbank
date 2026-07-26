@@ -167,6 +167,18 @@
     text-transform: uppercase;
     color: var(--ink-muted);
   }
+  .io-btn {
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--bg-card);
+    color: var(--ink-soft);
+    font-family: var(--sans);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .io-btn:hover { border-color: var(--accent); color: var(--accent); }
   .domain-section { margin-bottom: 2.5rem; }
   .domain-header {
     display: flex;
@@ -753,6 +765,9 @@
     <input type="text" id="global-search" class="search-box" placeholder="Search across all modules (front, back, tags)…">
     <span class="target-label">Daily target</span>
     <input type="number" id="daily-target" class="target-input" min="5" max="500" step="5" value="20">
+    <button class="io-btn" id="export-progress" title="Download a backup of your progress (SRS schedule, streak, activity)">↓ Export progress</button>
+    <button class="io-btn" id="import-progress" title="Load a progress file and merge it into this device (newest review per card wins)">↑ Import progress</button>
+    <input type="file" id="import-file" accept="application/json,.json" style="display:none">
   </div>
 
   <div id="search-results" class="global-search-results" style="display:none;"></div>
@@ -1648,6 +1663,101 @@ document.addEventListener("keydown", e => {
       if (card) rateCard(card, map[e.key]);
     }
   }
+});
+
+// ============================================================
+// PROGRESS EXPORT / IMPORT (cross-device via a JSON file)
+// ============================================================
+function countReviewed() {
+  let n = 0;
+  for (const dk in state) {
+    const cs = state[dk] && state[dk].cards;
+    if (cs) n += Object.keys(cs).length;
+  }
+  return n;
+}
+
+function exportProgress() {
+  const payload = {
+    _app: "qbank-progress", _version: 1, _exportedAt: new Date().toISOString(),
+    namespace: NS, state, activity, target, streak
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "qbank-progress-" + todayDate() + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Keep the SRS record with the later lastReviewed date (YYYY-MM-DD sorts lexically).
+function mergeSrs(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return ((b.lastReviewed || "") > (a.lastReviewed || "")) ? b : a;
+}
+
+function mergeProgress(data) {
+  const impState = data.state || {};
+  for (const dk in impState) {
+    const imp = impState[dk] || {};
+    if (!state[dk]) state[dk] = { cards: {}, reviewsToday: 0, lastReviewDate: null, filter: "all" };
+    const loc = state[dk];
+    if (!loc.cards) loc.cards = {};
+    const impCards = imp.cards || {};
+    for (const cid in impCards) loc.cards[cid] = mergeSrs(loc.cards[cid], impCards[cid]);
+    // deck review meta: later date wins; same date -> max
+    const ld = loc.lastReviewDate || "", id = imp.lastReviewDate || "";
+    if (id > ld) { loc.lastReviewDate = imp.lastReviewDate; loc.reviewsToday = imp.reviewsToday || 0; }
+    else if (id === ld && id) { loc.reviewsToday = Math.max(loc.reviewsToday || 0, imp.reviewsToday || 0); }
+    if (!loc.filter && imp.filter) loc.filter = imp.filter;
+  }
+  // activity heatmap: union of dates, max count per date
+  const impAct = data.activity || {};
+  for (const d in impAct) activity[d] = Math.max(activity[d] || 0, impAct[d] || 0);
+  // streak: later lastDate wins; tie -> max count
+  const s = data.streak;
+  if (s && s.lastDate) {
+    const ll = (streak && streak.lastDate) || "";
+    if (s.lastDate > ll) streak = { lastDate: s.lastDate, count: s.count || 0 };
+    else if (s.lastDate === ll) streak.count = Math.max((streak.count || 0), (s.count || 0));
+  }
+  if (typeof data.target === "number" && data.target > 0) target = data.target;
+}
+
+function importProgress(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch (e) { alert("Import failed — not valid JSON."); return; }
+    if (!data || data._app !== "qbank-progress") {
+      alert("Import failed — this is not a qbank progress file.");
+      return;
+    }
+    const before = countReviewed();
+    try { mergeProgress(data); }
+    catch (e) { alert("Import failed while merging: " + e.message); return; }
+    saveState();
+    renderDashboard();
+    const after = countReviewed();
+    const exportedAt = data._exportedAt ? new Date(data._exportedAt).toLocaleString() : "unknown date";
+    alert("Progress merged (newest review per card kept).\n"
+      + "Cards with saved progress: " + after + " (was " + before + ").\n"
+      + "Imported file exported: " + exportedAt + ".");
+  };
+  reader.onerror = () => alert("Could not read the file.");
+  reader.readAsText(file);
+}
+
+document.getElementById("export-progress").addEventListener("click", exportProgress);
+document.getElementById("import-progress").addEventListener("click", () =>
+  document.getElementById("import-file").click());
+document.getElementById("import-file").addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) importProgress(f);
+  e.target.value = "";  // allow re-selecting the same file later
 });
 
 // Initial render
