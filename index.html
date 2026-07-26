@@ -125,6 +125,8 @@
     letter-spacing: 0.01em; transition: filter 0.15s ease;
   }
   .shuffle-btn:hover { filter: brightness(1.08); }
+  .shuffle-btn.secondary { margin-left: 0; background: transparent; color: var(--gold); }
+  .shuffle-btn.secondary:hover { background: rgba(184, 137, 61, 0.10); filter: none; }
   .card-module {
     font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--gold);
@@ -715,6 +717,7 @@
         <span><span class="dot tp-dot-new"></span>New <b id="tp-new">0</b></span>
       </span>
       <button class="shuffle-btn" id="shuffle-all" title="Study every card in the whole bank in random order">⤨ Shuffle all — random</button>
+      <button class="shuffle-btn secondary" id="shuffle-vignettes" title="Study every clinical vignette in the whole bank in random order">⤨ Shuffle vignettes</button>
     </div>
     <div class="total-progress-bar" id="total-progress-bar" title="Learned + Learning vs total across the whole bank">
       <span class="tp-seg-learned" id="tp-seg-learned" style="width:0%"></span>
@@ -844,6 +847,7 @@ let backRevealed = false;
 let detailDeckId = null;
 let cramMode = false;
 let shuffleMode = false;  // true = studying every deck at once in random order
+let shuffleVignettesOnly = false;  // within shuffle, restrict to vignette cards
 let currentDeckId = null; // deck of the card currently on screen (differs per-card in shuffle)
 let sessionQueue = [];   // ordered {deckId, id} items remaining in the current sitting (Due, Cram & Shuffle).
                          // A card rated "Again" (q=0) is re-queued AGAIN_GAP cards ahead and stays until rated >=2.
@@ -1072,7 +1076,7 @@ function showDashboard() {
   document.getElementById("study-view").classList.remove("open");
   document.getElementById("module-detail-view").classList.remove("open");
   document.getElementById("dashboard-view").style.display = "block";
-  activeDeckId = null; detailDeckId = null; cramMode = false; shuffleMode = false; sessionQueue = [];
+  activeDeckId = null; detailDeckId = null; cramMode = false; shuffleMode = false; shuffleVignettesOnly = false; sessionQueue = [];
   renderDashboard();
   window.scrollTo(0,0);
 }
@@ -1189,6 +1193,7 @@ function buildSessionQueue() {
     for (const m of DECK_REGISTRY) {
       const ds = ensureDeckState(m.deck_id);
       for (const c of m.deck.cards) {
+        if (shuffleVignettesOnly && c.type !== "vignette") continue;  // vignettes-only
         if (!cramMode) {
           const srs = ds.cards[c.id];
           if (srs && srs.due && srs.due > today) continue;  // due-only
@@ -1230,6 +1235,7 @@ function enterStudyMode(deckId, filter, cram) {
   }
   cramMode = !!cram;
   shuffleMode = false;
+  shuffleVignettesOnly = false;
   document.getElementById("study-title").textContent = meta.title || deckId;
   document.getElementById("dashboard-view").style.display = "none";
   document.getElementById("module-detail-view").classList.remove("open");
@@ -1242,13 +1248,16 @@ function enterStudyMode(deckId, filter, cram) {
   renderStudy();
 }
 
-function enterShuffleMode() {
-  // Study every card in the whole bank, in random order.
+function enterShuffleMode(vignettesOnly) {
+  // Study every card in the whole bank in random order; optionally vignettes only.
   shuffleMode = true;
+  shuffleVignettesOnly = !!vignettesOnly;
   activeDeckId = null;
   activeFilter = "all";
-  cramMode = true;  // default: all cards (toggle to Due for due-only across the bank)
-  document.getElementById("study-title").textContent = "Shuffle — all modules (random)";
+  cramMode = true;  // default: all in-scope cards (toggle to Due for due-only across the bank)
+  document.getElementById("study-title").textContent = shuffleVignettesOnly
+    ? "Shuffle — all clinical vignettes (random)"
+    : "Shuffle — all modules (random)";
   document.getElementById("dashboard-view").style.display = "none";
   document.getElementById("module-detail-view").classList.remove("open");
   document.getElementById("study-view").classList.add("open");
@@ -1576,7 +1585,7 @@ function markdownLite(text) {
 // ============================================================
 document.getElementById("back-to-dashboard").addEventListener("click", () => {
   document.getElementById("study-view").classList.remove("open");
-  cramMode = false; shuffleMode = false; sessionQueue = [];
+  cramMode = false; shuffleMode = false; shuffleVignettesOnly = false; sessionQueue = [];
   if (activeDeckId) {
     enterModuleDetail(activeDeckId);  // study mode returns to its module hub
   } else {
@@ -1593,7 +1602,8 @@ document.getElementById("mode-toggle").addEventListener("click", () => {
   renderStudy();
 });
 
-document.getElementById("shuffle-all").addEventListener("click", () => enterShuffleMode());
+document.getElementById("shuffle-all").addEventListener("click", () => enterShuffleMode(false));
+document.getElementById("shuffle-vignettes").addEventListener("click", () => enterShuffleMode(true));
 
 const detailFilter = document.getElementById("detail-filter");
 detailFilter.addEventListener("input", () => {
